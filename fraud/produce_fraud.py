@@ -15,7 +15,7 @@ CITIES = [
 ]
 
 TOPIC = 'authorizations'
-BOOTSTRAP_SERVERS = 'morhidi-demo-1.vpc.cloudera.com:9092'
+BOOTSTRAP_SERVERS = 'csa-test-1.vpc.cloudera.com:9092'
 
 
 def get_latlon():
