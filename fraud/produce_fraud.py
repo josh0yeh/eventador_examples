@@ -1,15 +1,9 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
-
 import json
-import os
 import random
-from random import uniform
-import time
-import sys
-import eventador as ev
 
+from kafka import KafkaProducer
 from card_generator import generate_card
 from geopoint import create_geopoint
 
@@ -20,37 +14,44 @@ CITIES = [
     {"lat": 32.7767, "lon": -96.7970, "city": "dallas"}
 ]
 
+TOPIC = 'authorizations'
+BOOTSTRAP_SERVERS = 'morhidi-demo-1.vpc.cloudera.com:9092'
+
+
 def get_latlon():
     geo = random.choice(CITIES)
     return create_geopoint(geo['lat'], geo['lon'])
+
 
 def purchase():
     """Return a random amount in cents """
     return random.randrange(1000, 90000)
 
+
 def get_user():
     """ return a random user """
     return random.randrange(0, 999)
 
+
 def make_fraud(seed, card, user, latlon):
     """ return a fraudulent transaction """
-    amount = (seed+1)*1000
+    amount = (seed + 1) * 1000
     payload = {"userid": user,
                "amount": amount,
-	           "lat": latlon[0],
-	           "lon": latlon[1],
+               "lat": latlon[0],
+               "lon": latlon[1],
                "card": card
-              }
+               }
     return payload
 
-def fraud_loop(session):
 
+def fraud_loop(producer):
     payload = {}
     fraud_trigger = 15
     i = 1
 
     while True:
-
+        payload = None
         if i % fraud_trigger == 0:
             # fraud
             print("fraud..")
@@ -59,8 +60,9 @@ def fraud_loop(session):
             latlon = get_latlon()
             for r in range(3):
                 payload = make_fraud(r, card, user, latlon)
+                print(f'fraud: {payload}')
                 try:
-                    ev.produce(session, payload)
+                    producer.send(topic=TOPIC, value=payload)
                 except Exception as ex:
                     print("unable to produce {}".format(ex))
         else:
@@ -69,23 +71,25 @@ def fraud_loop(session):
             payload = {
                 "userid": get_user(),
                 "amount": purchase(),
-    	        "lat": latlon[0],
-		        "lon": latlon[1],
+                "lat": latlon[0],
+                "lon": latlon[1],
                 "card": generate_card("visa16")
             }
-
+        print(payload)
         try:
-            ev.produce(session, payload)
+            producer.send(topic=TOPIC, value=payload)
             i += 1
+
         except Exception as ex:
             print("unable to produce {}".format(ex))
 
 
 
-if __name__== "__main__":
+if __name__ == "__main__":
     try:
-        session  = ev.create_session()
-        response = ev.create_topic(session)
-        fraud_loop(session)
+        producer = KafkaProducer(
+            bootstrap_servers=BOOTSTRAP_SERVERS,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+        fraud_loop(producer)
     except Exception as e:
         print(e)
